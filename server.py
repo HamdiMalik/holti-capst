@@ -25,7 +25,7 @@ class_names = [
 ]
 
 # Setup Firebase Admin
-cred = credentials.Certificate("key-access/key-access-firestore.json")# Ganti dengan path ke file kredensial Anda
+cred = credentials.Certificate("key-access/key-access-firestore.json")  # Ganti dengan path ke file kredensial Anda
 firebase_admin.initialize_app(cred)
 
 # Inisialisasi Firestore
@@ -39,7 +39,7 @@ def load_model():
     try:
         # Unduh model dan simpan ke file lokal sementara
         model_path = get_file("model.h5", model_url)
-        
+
         # Muat model dari file yang sudah diunduh
         model = tf.keras.models.load_model(model_path)
         print("Model loaded successfully!")
@@ -56,31 +56,30 @@ def predict_image(image: Image.Image):
         image = image.resize((224, 224))
         image_array = np.array(image) / 255.0  # Normalisasi
         input_tensor = np.expand_dims(image_array, axis=0)  # Tambahkan dimensi batch
-        
+
         # Prediksi
         predictions = model.predict(input_tensor)
         predicted_class_index = np.argmax(predictions, axis=-1)[0]
         predicted_class = class_names[predicted_class_index]
-        
+
         # Buat respons informatif
         confidence_percentage = predictions[0][predicted_class_index] * 100  # Ubah ke persentase
         return predicted_class, confidence_percentage
     except Exception as e:
         raise ValueError(f"Error during prediction: {str(e)}")
-
 # Fungsi untuk menyimpan hasil prediksi ke Firestore
 def save_to_firestore(prediction, confidence_percentage, timestamp):
     try:
         # Generate unique ID for document
         prediction_id = str(uuid.uuid4())
-        
+
         # Data yang akan disimpan
         data = {
             "prediction": prediction,
-            "confidence": confidence_percentage,
+            "confidence": float(confidence_percentage),  # Konversi ke float biasa
             "timestamp": timestamp,
         }
-        
+
         # Simpan data ke koleksi Firestore
         db.collection("predictions").document(prediction_id).set(data)
         print(f"Prediction saved to Firestore with ID: {prediction_id}")
@@ -97,16 +96,16 @@ async def predict(file: UploadFile = File(...)):
     try:
         # Baca file gambar
         image = Image.open(file.file)
-        
+
         # Lakukan prediksi
         prediction, confidence_percentage = predict_image(image)
-        
+
         # Ambil timestamp
         timestamp = datetime.utcnow()
-        
+
         # Simpan hasil prediksi ke Firestore
         save_to_firestore(prediction, confidence_percentage, timestamp)
-        
+
         # Respons yang lebih menarik
         response = {
             "status": "success",
@@ -115,7 +114,7 @@ async def predict(file: UploadFile = File(...)):
             "confidence": f"{confidence_percentage:.2f}%",  # Format ke 2 desimal
             "explanation": f"Berdasarkan analisis model, gambar ini diprediksi sebagai '{prediction}' dengan kepercayaan {confidence_percentage:.2f}%.",
         }
-        
+
         return JSONResponse(content=response)
     
     except Exception as e:
@@ -123,4 +122,4 @@ async def predict(file: UploadFile = File(...)):
 
 # Jalankan server
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
